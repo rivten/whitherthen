@@ -1,108 +1,53 @@
+#if COMPILE_WINDOWS
+#elif COMPILE_LINUX
+#else
+#error You must specify either COMPILE_WINDOWS=1 or COMPILE_LINUX=1 in the build script !
+#endif
+
 #define SOKOL_ASSERT(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
 #define SOKOL_IMPL
 #define SOKOL_GLCORE33
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 
-#include "sokol_fetch.h"
 #include "sokol_time.h"
-
-#ifdef _WIN32
-#pragma warning(push)
-#pragma warning(disable: 4267)
-#endif
-#define FONS_STATIC
-#define FONTSTASH_IMPLEMENTATION
-#include "fontstash.h"
-#ifdef _WIN32
-#pragma warning(pop)
-#endif
-
-#define SOKOL_GL_IMPL
-#include "sokol_gl.h"
-#define SOKOL_FONTSTASH_IMPL
-#include "sokol_fontstash.h"
-
-#include "imgui.cpp"
-#undef STB_TRUETYPE_IMPLEMENTATION
-#undef __STB_INCLUDE_STB_TRUETYPE_H__
-#include "imgui_draw.cpp"
-#include "imgui_widgets.cpp"
-#include "imgui_demo.cpp"
-#define SOKOL_IMGUI_IMPL
-#include "sokol_imgui.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 #include "platform.h"
 #include "intrinsics.h"
 #include "math.h"
 #include "shared.h"
-
 #include "memory.h"
+
+#ifdef COMPILE_WINDOWS
+#elif COMPILE_LINUX
+#define SOKOL_STATE_FILE_NAME_COUNT  512
+#endif
+#include "sokol_whitherthen.h"
+
+#include "renderer.h"
+#include "renderer.cpp"
+#include "sokol_renderer.h"
+#include "sokol_renderer.cpp"
+
+#if COMPILE_WINDOWS
+#elif COMPILE_LINUX
+#include <sys/stat.h> // stat
+#include <dlfcn.h> // dlopen, dlsym, dlclose
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h> // errno
+#endif
 
 global uint64_t LastTime = 0;
 global bool ShowImgui = false;
-
-#include "renderer.cpp"
 
 global game_input GlobalInput[2] = {};
 global game_input* NewInput = nullptr;
 global game_input* OldInput = nullptr;
 global game_memory GameMemory = {};
 global platform_renderer* Renderer = nullptr;
-
-internal void FetchCallback(const sfetch_response_t* Response)
-{
-	if(Response->fetched)
-	{
-		int PngWidth = 0;
-		int PngHeight = 0;
-		int NumChannels = 0;
-		const int DesiredChannels = 4;
-		stbi_uc* Pixels = stbi_load_from_memory((stbi_uc* const)Response->buffer_ptr, (int)Response->fetched_size, &PngWidth, &PngHeight, &NumChannels, DesiredChannels);
-		if(Pixels)
-		{
-			sg_image_desc ImageDesc = {};
-			ImageDesc.width = PngWidth;
-			ImageDesc.height = PngHeight;
-			ImageDesc.layers = 1;
-            ImageDesc.type = SG_IMAGETYPE_ARRAY;
-			ImageDesc.pixel_format = SG_PIXELFORMAT_RGBA8;
-			ImageDesc.min_filter = SG_FILTER_LINEAR;
-			ImageDesc.mag_filter = SG_FILTER_LINEAR;
-			ImageDesc.content.subimage[0][0].ptr = Pixels;
-			ImageDesc.content.subimage[0][0].size = PngWidth * PngHeight * DesiredChannels;
-			// TODO(hugo): fix this hack
-			sokol_gfx* GFX = (sokol_gfx *)Renderer;
-			sg_init_image(GFX->Bindings.fs_images[0], &ImageDesc);
-			stbi_image_free(Pixels);
-		}
-	}
-}
-
-#define TILE_SIZE_IN_PIXELS 16
-
-enum sokol_memory_block_flag
-{
-    SokolMem_AllocatedDuringLooping = 0x1,
-    SokolMem_FreedDuringLooping = 0x2,
-};
-
-struct sokol_memory_block
-{
-    platform_memory_block Block;
-    sokol_memory_block* Prev;
-    sokol_memory_block* Next;
-    u64 LoopingFlags;
-};
-
-struct sokol_state
-{
-    ticket_mutex MemoryMutex;
-    sokol_memory_block MemorySentinel;
-};
+global sokol_renderer_function_table RendererFunctions = {};
+global sokol_game_function_table Game = {}; 
 
 global sokol_state GlobalSokolState;
 
@@ -244,6 +189,240 @@ internal PLATFORM_READ_DATA_FROM_FILE(SokolReadDataFromFile)
     }
 }
 
+struct sokol_loaded_code
+{
+    b32x IsValid;
+    char *DLLFullPath;
+    
+#ifdef COMPILE_WINDOWS
+#elif COMPILE_LINUX
+    void *DLL;
+    ino_t DLLFileID;
+#endif
+    
+    u32 FunctionCount;
+    char **FunctionNames;
+    void **Functions;
+};
+
+#if COMPILE_LINUX
+internal inline ino_t
+LinuxFileId(char *FileName)
+{
+    struct stat Attr = {};
+    if (stat(FileName, &Attr))
+    {
+        Attr.st_ino = 0;
+    }
+    
+    return Attr.st_ino;
+}
+#endif
+
+internal void* SokolLoadFunction(void *DLLHandle, const char *Name)
+{
+#ifdef COMPILE_WINDOWS
+	NotImplemented
+#elif COMPILE_LINUX
+    void *Symbol = dlsym(DLLHandle, Name);
+    if (!Symbol)
+    {
+        fprintf(stderr, "dlsym failed: %s\n", dlerror());
+    }
+    // TODO(michiel): Check if lib with underscore exists?!
+    return Symbol;
+#endif
+}
+
+internal void* SokolLoadLibrary(const char *Name)
+{
+#if COMPILE_WINDOWS
+	NotImplemented
+#elif COMPILE_LINUX
+    void *Handle = NULL;
+    
+    Handle = dlopen(Name, RTLD_NOW | RTLD_LOCAL);
+    if (!Handle)
+    {
+        fprintf(stderr, "dlopen failed: %s\n", dlerror());
+    }
+    return Handle;
+#endif
+}
+
+internal void SokolUnloadLibrary(void *Handle)
+{
+#if COMPILE_WINDOWS
+	NotImplemented
+#elif COMPILE_LINUX
+    if (Handle != NULL)
+    {
+        dlclose(Handle);
+        Handle = NULL;
+    }
+#endif
+}
+
+internal void SokolUnloadCode(sokol_loaded_code *Loaded)
+{
+#if COMPILE_WINDOWS
+	NotImplemented
+#elif COMPILE_LINUX
+    if (Loaded->DLL)
+    {
+        // TODO(casey): Currently, we never unload libraries, because
+        // we may still be pointing to strings that are inside them
+        // (despite our best efforts).  Should we just make "never unload"
+        // be the policy?
+        //LinuxUnloadLibrary(Loaded->Library);
+        Loaded->DLL = 0;
+    }
+    Loaded->DLLFileID = 0;
+    Loaded->IsValid = false;
+    ZeroArray(Loaded->FunctionCount, Loaded->Functions);
+#endif
+}
+
+internal void SokolLoadCode(sokol_state* State, sokol_loaded_code *Loaded)
+{
+#if COMPILE_WINDOWS
+#elif COMPILE_LINUX
+   ino_t FileID = LinuxFileId(Loaded->DLLFullPath);
+    
+    if (Loaded->DLLFileID != FileID)
+    {
+        // NOTE(michiel): Create temp file, copy the library and load.
+        // dlopen uses a caching mechanism based on the library name.
+        char TempFileName[SOKOL_STATE_FILE_NAME_COUNT];
+        FormatString(SOKOL_STATE_FILE_NAME_COUNT, TempFileName, "%sXXXXXX",
+                     Loaded->DLLFullPath);
+        s32 FD = mkstemp(TempFileName);
+        s32 OrigFile = open(Loaded->DLLFullPath, O_RDONLY);
+        
+        if ((FD >=0) && (OrigFile >= 0))
+        {
+            char ReadBuffer[4096];
+            ssize_t ReadCount = read(OrigFile, ReadBuffer, sizeof(ReadBuffer));
+            
+            while (ReadCount > 0)
+            {
+                char *WriteBuffer = ReadBuffer;
+                ssize_t WriteCount;
+                do {
+                    WriteCount = write(FD, WriteBuffer, ReadCount);
+                    
+                    if (WriteCount >= 0)
+                    {
+                        ReadCount -= WriteCount;
+                        WriteBuffer += WriteCount;
+                    }
+                    else if (errno != EINTR)
+                    {
+                        Assert(!"Could not copy shared library while loading.");
+                    }
+                } while (ReadCount > 0);
+                ReadCount = read(OrigFile, ReadBuffer, sizeof(ReadBuffer));
+            }
+            if (ReadCount == 0)
+            {
+                close(OrigFile);
+                close(FD);
+            }
+            else
+            {
+                Assert(!"Could not copy whole shared library while loading.");
+            }
+        }
+        else
+        {
+            Assert(!"Could not open shared library for copying.");
+        }
+        
+        //LinuxUnloadLibrary(Loaded->Library);
+        Loaded->DLLFileID = FileID;
+        Loaded->IsValid = false;
+        
+        Loaded->DLL = SokolLoadLibrary(TempFileName);
+        if (Loaded->DLL)
+        {
+            Loaded->IsValid = true;
+            for (u32 FunctionIndex = 0;
+                 FunctionIndex < Loaded->FunctionCount;
+                 ++FunctionIndex)
+            {
+                void *Function = SokolLoadFunction(Loaded->DLL, Loaded->FunctionNames[FunctionIndex]);
+                if (Function)
+                {
+                    Loaded->Functions[FunctionIndex] = Function;
+                }
+                else
+                {
+                    Loaded->IsValid = false;
+                }
+            }
+        }
+    }
+    
+    if(!Loaded->IsValid)
+    {
+        SokolUnloadCode(Loaded);
+    }
+#endif
+}
+
+
+internal void SokolGetEXEFileName(sokol_state *State)
+{
+#if COMPILE_WINDOWS
+	NotImplemented
+#elif COMPILE_LINUX
+    // NOTE(casey): Never use MAX_PATH in code that is user-facing, because it
+    // can be dangerous and lead to bad results.
+    ssize_t NumRead = readlink("/proc/self/exe", State->EXEFileName, ArrayCount(State->EXEFileName) - 1);
+    if (NumRead > 0)
+    {
+        State->OnePastLastEXEFileNameSlash = State->EXEFileName;
+        for(char *Scan = State->EXEFileName;
+            *Scan;
+            ++Scan)
+        {
+            if(*Scan == '/')
+            {
+                State->OnePastLastEXEFileNameSlash = Scan + 1;
+            }
+        }
+    }
+#endif
+}
+
+internal void SokolBuildEXEPathFileName(sokol_state *State, char *FileName, u32 Unique, int DestCount, char *Dest)
+{
+#if COMPILE_WINDOWS
+	NotImplemented
+#elif COMPILE_LINUX
+    string A =
+    {
+        (umm)(State->OnePastLastEXEFileNameSlash - State->EXEFileName),
+        (u8 *)State->EXEFileName,
+    };
+    string B = WrapZ(FileName);
+    if (Unique == 0) 
+    {
+        FormatString(DestCount, Dest, "%S%S", A, B);
+    }
+    else
+    {
+        FormatString(DestCount, Dest, "%S%d_%S", A, Unique, B);
+    }
+    //fprintf(stdout, "Build path %s\n", Dest);
+#endif
+}
+
+internal void SokolBuildEXEPathFileName(sokol_state *State, char *FileName, int DestCount, char *Dest)
+{
+    SokolBuildEXEPathFileName(State, FileName, 0, DestCount, Dest);
+}
+
 #define TEXTURE_COUNT 128
 #define TEXTURE_TRANSFER_BUFFER_SIZE (128*1024*1024)
 
@@ -253,35 +432,57 @@ internal void SokolInit(void)
     State->MemorySentinel.Prev = &State->MemorySentinel;
     State->MemorySentinel.Next = &State->MemorySentinel;
 
+    SokolGetEXEFileName(State);
+
+    char SourceGameCodeDLLFullPath[SOKOL_STATE_FILE_NAME_COUNT];
+    SokolBuildEXEPathFileName(State, "libWhitherthen.so",
+                              sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);
+
+#if 0
+    char RendererCodeDLLFullPath[SOKOL_STATE_FILE_NAME_COUNT];
+    SokolBuildEXEPathFileName(State, "libWhitherthenSokolGFX.so",
+                              sizeof(RendererCodeDLLFullPath), RendererCodeDLLFullPath);
+#endif
+    
+
     NewInput = &GlobalInput[0];
     OldInput = &GlobalInput[1];
-
-	sfetch_desc_t FetchDesc = {};
-	FetchDesc.max_requests = 1;
-	FetchDesc.num_channels = 1;
-	FetchDesc.num_lanes = 1;
-	sfetch_setup(&FetchDesc);
 
 	u32 MaxQuadCountPerFrame = (1 << 20);
 	platform_renderer_limits Limits = {};
 	Limits.MaxQuadCountPerFrame = MaxQuadCountPerFrame;
     Limits.MaxTextureCount = TEXTURE_COUNT;
     Limits.TextureTransferBufferSize = TEXTURE_TRANSFER_BUFFER_SIZE;
-	Renderer = (platform_renderer *)SokolInitGFX(&Limits);
-
-	stm_setup();
-
-	simgui_desc_t ImguiDesc = {};
-	simgui_setup(&ImguiDesc);
 
 #if 0
-	sfetch_request_t FetchRequest = {};
-	FetchRequest.path = "../data/roguelike_tileset.png";
-	FetchRequest.callback = FetchCallback;
-	FetchRequest.buffer_ptr = FileBuffer;
-	FetchRequest.buffer_size = sizeof(FileBuffer);
-	sfetch_send(&FetchRequest);
+	sokol_loaded_code RendererCode = {};
+	RendererCode.DLLFullPath = RendererCodeDLLFullPath;
+	RendererCode.FunctionCount = ArrayCount(SokolRendererFunctionTableNames);
+	RendererCode.FunctionNames = SokolRendererFunctionTableNames;
+	RendererCode.Functions = (void **)&RendererFunctions;
+
+	SokolLoadCode(State, &RendererCode);
+	if(!RendererCode.IsValid)
+	{
+		Assert(false);
+	}
+#else
+	RendererFunctions.LoadRenderer = &SokolInitGFX;
+	RendererFunctions.BeginFrame = &RendererBeginFrame;
+	RendererFunctions.EndFrame = &RendererEndFrame;
 #endif
+
+	Renderer = RendererFunctions.LoadRenderer(&Limits);
+
+	sokol_loaded_code GameCode = {};
+	GameCode.DLLFullPath = SourceGameCodeDLLFullPath;
+	GameCode.FunctionCount = ArrayCount(SokolGameFunctionTableNames);
+	GameCode.FunctionNames = SokolGameFunctionTableNames;
+	GameCode.Functions = (void **)&Game;
+
+	SokolLoadCode(State, &GameCode);
+
+	stm_setup();
 
     GameMemory.PlatformAPI.OpenFile = SokolOpenFile;
     GameMemory.PlatformAPI.CloseFile = SokolCloseFile;
@@ -291,16 +492,13 @@ internal void SokolInit(void)
 
     GameMemory.TextureQueue = &Renderer->TextureQueue;
 #ifdef COMPILE_INTERNAL
-	GameMemory.ImGuiContext = ImGui::GetCurrentContext();
+	//GameMemory.ImGuiContext = ImGui::GetCurrentContext();
 #endif
 }
-
-#include "whitherthen.cpp"
 
 internal void SokolFrame(void)
 {
 	const double dt = stm_sec(stm_laptime(&LastTime));
-	simgui_new_frame(sapp_width(), sapp_height(), dt);
 
     NewInput->dtForFrame = dt;
 
@@ -309,44 +507,18 @@ internal void SokolFrame(void)
 		ShowImgui = !ShowImgui;
 	}
 
-	sfetch_dowork();
+    game_render_commands* Frame = RendererFunctions.BeginFrame(Renderer, V2U(sapp_width(), sapp_height()), dt);
 
-    game_render_commands* Frame = RendererBeginFrame((sokol_gfx *)Renderer, V2U(sapp_width(), sapp_height()));
-    GameUpdateAndRender(&GameMemory, NewInput, Frame);
-    if(NewInput->QuitRequested)
-    {
-        sapp_quit();
-    }
-
-	if(ShowImgui)
-    {
-        //ImGui::ShowDemoWindow();
-        ImGui::Text("dt = %.4f", dt);
-
-#if 0
-		ImGui::Text("Vertex Count : %u", Frame->VertexCount);
-		ImGui::Text("Index Count : %u", Frame->IndexCount);
-		for(u32 VertexIndex = 0; VertexIndex < Frame->VertexCount; ++VertexIndex)
+	if(Game.UpdateAndRender)
+	{
+		Game.UpdateAndRender(&GameMemory, NewInput, Frame);
+		if(NewInput->QuitRequested)
 		{
-			textured_vertex* V = Frame->VertexArray + VertexIndex;
-			ImGui::Text("Vertex : P(%f, %f, %f, %f), UV(%f, %f), C(%u)", V->P.x, V->P.y, V->P.z, V->P.w, V->UV.x, V->UV.y, V->Color);
+			sapp_quit();
 		}
-		ImGui::Text("%u", sg_query_image_info(((sokol_gfx *)Renderer)->Bindings.fs_images[0]).slot.state);
-#endif
-#if 0
-		for(u32 IndexIndex = 0; IndexIndex < Frame->IndexCount; ++IndexIndex)
-		{
-			ImGui::Text("Index : %u", Frame->IndexArray[IndexIndex]);
-		}
-#endif
-        for(u32 CommandIndex = 0; CommandIndex < Frame->RenderTextCommandCount; ++CommandIndex)
-        {
-            render_text_command* Command = Frame->RenderTextCommands + CommandIndex;
-            ImGui::Text("Size : %.2f", Command->Size);
-        }
-    }
+	}
 
-	RendererEndFrame((sokol_gfx *)Renderer, Frame);
+	RendererFunctions.EndFrame(Renderer, Frame);
 
     game_input *Temp = NewInput;
     NewInput = OldInput;

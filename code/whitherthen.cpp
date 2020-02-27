@@ -1,12 +1,11 @@
 
+#include "whitherthen.h"
 #include "color_palette.h"
 
-internal void PushTile(game_render_commands* RenderCommands, renderer_texture Texture, v2 Pos, v2 TileSetPos, v4 Color)
-{
-    rectangle2 DestRect = RectCenterHalfDim(2.0f * TILE_SIZE_IN_PIXELS * Pos, V2(TILE_SIZE_IN_PIXELS, TILE_SIZE_IN_PIXELS));
-    rectangle2 SourceRect = RectMinDim(TILE_SIZE_IN_PIXELS * TileSetPos, V2(TILE_SIZE_IN_PIXELS, TILE_SIZE_IN_PIXELS));
-	PushBitmap(RenderCommands, Texture, SourceRect, DestRect, Color);
-}
+#include "renderer.cpp"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 enum entity_type
 {
@@ -176,7 +175,7 @@ internal renderer_texture LoadBitmap(renderer_texture_queue* TextureOpQueue, cha
     return(Texture);
 }
 
-internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_render_commands* RenderCommands)
+extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     Platform = Memory->PlatformAPI;
     Assert((&Input->KeyboardController.Terminator - &Input->KeyboardController.Buttons[0]) ==
@@ -187,7 +186,7 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
     {
         GameState = Memory->GameState = BootstrapPushStruct(game_state, TotalArena);
 #if COMPILE_INTERNAL
-		ImGui::SetCurrentContext(Memory->ImGuiContext);
+		//ImGui::SetCurrentContext(Memory->ImGuiContext);
 #endif
 
 		v4 WallC = ColorPalette0[0];
@@ -199,6 +198,7 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
 
         GameState->TextSize = 100.0f;
         GameState->TileSetTexture = LoadBitmap(Memory->TextureQueue, "../data/roguelike_tileset.png");
+		DefaultTexture = GameState->TileSetTexture;
     }
 
 	GameState->Timer += Input->dtForFrame;
@@ -277,6 +277,8 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
 		TextC.a = Alpha;
 		PushText(RenderCommands, V2(0.0f, 200.0f), TextC, GameState->TextSize, "NEW ROOM");
 	}
+
+	PushRect(RenderCommands, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V4(1.0f, 0.0f, 0.0f, 0.5f));
 #if 0
     ImGui::Text("%f", GameState->JustSteppedOnConnectionTimer);
     ImGui::SliderFloat("Text Size", &GameState->TextSize, 0.0f, 500.0f);

@@ -1,24 +1,32 @@
-CODE_PATH="$(dirname "$0")"
+set -e
 
-CommonFlags="-g -std=c++11 -Werror -Wall -Wextra -Wcast-align -Wmissing-noreturn -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wmissing-include-dirs -Wno-old-style-cast -Woverloaded-virtual -Wredundant-decls -Wsign-promo -Wstrict-overflow=4 -Wundef -Wno-unused -Wno-variadic-macros -Wno-parentheses -fdiagnostics-show-option -Wno-write-strings -Wno-absolute-value -Wno-cast-align -Wno-unused-parameter -Wno-format-nonliteral -Wno-missing-noreturn -Wno-sign-compare -lm"
+echo "Building..."
 
-if [ -n "$(command -v clang++)" ]
-then
-	CXX=clang++
-	CommonFlags+=" -Wno-missing-braces -Wno-null-dereference -Wno-self-assign"
-else
-	CXX=c++
-	CommonFlags+=" -Wno-unused-but-set-variable"
-fi
+GameLib="libWhitherthen.so"
+#RendererLib="libWhitherthenSokolGFX.so"
 
-CommonFlags+=" -DCOMPILE_SLOW=1 -DCOMPILE_INTERNAL=1"
+CommonCompilerFlags="-g -ggdb -std=c++11 -msse4.1 -ffast-math -Wno-braced-scalar-init -Wno-format -Wno-writable-strings -Wno-switch -Wno-unused-value"
+CommonDefines="-DCOMPILE_INTERNAL=1 -DCOMPILE_SLOW=1 -DCOMPILE_LINUX=1"
+CommonLinkerFlags="-pthread -lX11 -ldl -lGL"
 
-CommonLinkerFlags="-l GL -l X11 -l GLEW -l dl -l pthread"
+curDir=$(pwd)
+buildDir="$curDir/../build"
+dataDir="$curDir/../data"
 
-mkdir -p "$CODE_PATH/../build"
-pushd "$CODE_PATH/../build"
+pushd $buildDir > /dev/null
 
-$CXX $CommonFlags ../code/sokol_whitherthen.cpp $CommonLinkerFlags -o whitherthen
+#echo Building Renderer
+#clang++ -shared -fPIC $CommonCompilerFlags $CommonDefines "$curDir/sokol_renderer.cpp" -o build_$RendererLib -lGL
+#rm -f $RendererLib
+#mv build_$RendererLib $RendererLib
 
-popd
+echo Building Game Library
+clang++ -shared -fPIC $CommonCompilerFlags $CommonDefines "$curDir/whitherthen.cpp" -o build_$GameLib
 
+rm -f $GameLib
+mv build_$GameLib $GameLib
+
+echo Building Platform
+clang++ $CommonCompilerFlags $CommonDefines "$curDir/sokol_whitherthen.cpp" -o whitherthen $CommonLinkerFlags
+
+popd > /dev/null

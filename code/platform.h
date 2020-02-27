@@ -202,7 +202,7 @@ typedef struct game_memory
     platform_api PlatformAPI;
 
 #ifdef COMPILE_INTERNAL
-	ImGuiContext* ImGuiContext;
+	//ImGuiContext* ImGuiContext;
 #endif
 } game_memory;
 
