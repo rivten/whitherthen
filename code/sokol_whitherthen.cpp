@@ -1,3 +1,4 @@
+#define SOKOL_ASSERT(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
 #define SOKOL_IMPL
 #define SOKOL_GLCORE33
 #include "sokol_app.h"
@@ -42,7 +43,6 @@
 #include "memory.h"
 
 global uint64_t LastTime = 0;
-global uint8_t FileBuffer[256 * 1024];
 global bool ShowImgui = false;
 
 #include "renderer.cpp"
@@ -67,6 +67,8 @@ internal void FetchCallback(const sfetch_response_t* Response)
 			sg_image_desc ImageDesc = {};
 			ImageDesc.width = PngWidth;
 			ImageDesc.height = PngHeight;
+			ImageDesc.layers = 1;
+            ImageDesc.type = SG_IMAGETYPE_ARRAY;
 			ImageDesc.pixel_format = SG_PIXELFORMAT_RGBA8;
 			ImageDesc.min_filter = SG_FILTER_LINEAR;
 			ImageDesc.mag_filter = SG_FILTER_LINEAR;
@@ -191,6 +193,60 @@ PLATFORM_DEALLOCATE_MEMORY(SokolDeallocateMemory)
     }
 }
 
+internal PLATFORM_FILE_ERROR(SokolFileError)
+{
+    Handle->NoErrors = false;
+}
+
+internal PLATFORM_OPEN_FILE(SokolOpenFile)
+{
+    platform_file_handle Result = {};
+    FILE* fp = fopen(FileName, "rb");
+    Result.NoErrors = (fp != 0);
+    Result.Platform = fp;
+
+    // NOTE(hugo): Here I diverge from HandmadeHero's implementation.
+    // They get the FileInfo from previous call.
+    // Here, the FileInfo is part of the result.
+    if(fp)
+    {
+        fseek(fp, 0, SEEK_END);
+        Info->FileSize = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+    }
+
+    return(Result);
+}
+
+internal PLATFORM_CLOSE_FILE(SokolCloseFile)
+{
+    FILE* SokolHandle = (FILE *)Handle->Platform;
+    if(SokolHandle != 0)
+    {
+        fclose(SokolHandle);
+    }
+}
+
+internal PLATFORM_READ_DATA_FROM_FILE(SokolReadDataFromFile)
+{
+    if(PlatformNoFileErrors(Handle))
+    {
+        FILE* SokolHandle = (FILE *)Handle->Platform;
+        uint32 FileSize32 = SafeTruncateToU32(Size);
+        size_t BytesRead = fread(Dest, 1, Size, SokolHandle);
+        if(BytesRead == FileSize32)
+        {
+        }
+        else
+        {
+            SokolFileError(Handle, "Read file failed.");
+        }
+    }
+}
+
+#define TEXTURE_COUNT 128
+#define TEXTURE_TRANSFER_BUFFER_SIZE (128*1024*1024)
+
 internal void SokolInit(void)
 {
     sokol_state* State = &GlobalSokolState;
@@ -209,6 +265,8 @@ internal void SokolInit(void)
 	u32 MaxQuadCountPerFrame = (1 << 20);
 	platform_renderer_limits Limits = {};
 	Limits.MaxQuadCountPerFrame = MaxQuadCountPerFrame;
+    Limits.MaxTextureCount = TEXTURE_COUNT;
+    Limits.TextureTransferBufferSize = TEXTURE_TRANSFER_BUFFER_SIZE;
 	Renderer = (platform_renderer *)SokolInitGFX(&Limits);
 
 	stm_setup();
@@ -216,15 +274,22 @@ internal void SokolInit(void)
 	simgui_desc_t ImguiDesc = {};
 	simgui_setup(&ImguiDesc);
 
+#if 0
 	sfetch_request_t FetchRequest = {};
 	FetchRequest.path = "../data/roguelike_tileset.png";
 	FetchRequest.callback = FetchCallback;
 	FetchRequest.buffer_ptr = FileBuffer;
 	FetchRequest.buffer_size = sizeof(FileBuffer);
 	sfetch_send(&FetchRequest);
+#endif
 
+    GameMemory.PlatformAPI.OpenFile = SokolOpenFile;
+    GameMemory.PlatformAPI.CloseFile = SokolCloseFile;
+    GameMemory.PlatformAPI.ReadDataFromFile = SokolReadDataFromFile;
     GameMemory.PlatformAPI.AllocateMemory = SokolAllocateMemory;
     GameMemory.PlatformAPI.DeallocateMemory = SokolDeallocateMemory;
+
+    GameMemory.TextureQueue = &Renderer->TextureQueue;
 #ifdef COMPILE_INTERNAL
 	GameMemory.ImGuiContext = ImGui::GetCurrentContext();
 #endif
@@ -258,6 +323,7 @@ internal void SokolFrame(void)
         //ImGui::ShowDemoWindow();
         ImGui::Text("dt = %.4f", dt);
 
+#if 0
 		ImGui::Text("Vertex Count : %u", Frame->VertexCount);
 		ImGui::Text("Index Count : %u", Frame->IndexCount);
 		for(u32 VertexIndex = 0; VertexIndex < Frame->VertexCount; ++VertexIndex)
@@ -266,12 +332,18 @@ internal void SokolFrame(void)
 			ImGui::Text("Vertex : P(%f, %f, %f, %f), UV(%f, %f), C(%u)", V->P.x, V->P.y, V->P.z, V->P.w, V->UV.x, V->UV.y, V->Color);
 		}
 		ImGui::Text("%u", sg_query_image_info(((sokol_gfx *)Renderer)->Bindings.fs_images[0]).slot.state);
+#endif
 #if 0
 		for(u32 IndexIndex = 0; IndexIndex < Frame->IndexCount; ++IndexIndex)
 		{
 			ImGui::Text("Index : %u", Frame->IndexArray[IndexIndex]);
 		}
 #endif
+        for(u32 CommandIndex = 0; CommandIndex < Frame->RenderTextCommandCount; ++CommandIndex)
+        {
+            render_text_command* Command = Frame->RenderTextCommands + CommandIndex;
+            ImGui::Text("Size : %.2f", Command->Size);
+        }
     }
 
 	RendererEndFrame((sokol_gfx *)Renderer, Frame);

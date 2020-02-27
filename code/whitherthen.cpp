@@ -1,11 +1,11 @@
 
 #include "color_palette.h"
 
-internal void PushTile(game_render_commands* RenderCommands, v2 Pos, v2 TileSetPos, v4 Color)
+internal void PushTile(game_render_commands* RenderCommands, renderer_texture Texture, v2 Pos, v2 TileSetPos, v4 Color)
 {
     rectangle2 DestRect = RectCenterHalfDim(2.0f * TILE_SIZE_IN_PIXELS * Pos, V2(TILE_SIZE_IN_PIXELS, TILE_SIZE_IN_PIXELS));
     rectangle2 SourceRect = RectMinDim(TILE_SIZE_IN_PIXELS * TileSetPos, V2(TILE_SIZE_IN_PIXELS, TILE_SIZE_IN_PIXELS));
-	PushBitmap(RenderCommands, SourceRect, DestRect, Color);
+	PushBitmap(RenderCommands, Texture, SourceRect, DestRect, Color);
 }
 
 enum entity_type
@@ -50,6 +50,8 @@ struct game_state
 	entity Entities[256];
 
 	f32 JustSteppedOnConnectionTimer;
+    f32 TextSize;
+    renderer_texture TileSetTexture;
 };
 
 void PushEntity(game_state* GameState, v2 P, v4 C, entity_type Type, u32 Flags = EntityFlag_None)
@@ -144,6 +146,36 @@ internal entity* GetUnderlyingEntity(game_state* GameState, v2 P)
 }
 
 platform_api Platform;
+
+internal renderer_texture LoadBitmap(renderer_texture_queue* TextureOpQueue, char* FileName)
+{
+    u8 FileBuffer[256*1024] = {};
+    platform_file_info FileInfo = {};
+    platform_file_handle FileHandle = Platform.OpenFile(FileName, &FileInfo);
+    Platform.ReadDataFromFile(&FileHandle, 0, FileInfo.FileSize, FileBuffer);
+    Assert(PlatformNoFileErrors(&FileHandle));
+    Platform.CloseFile(&FileHandle);
+
+    int PngWidth = 0;
+    int PngHeight = 0;
+    int NumChannels = 0;
+    const int DesiredChannels = 4;
+    stbi_uc* Pixels = stbi_load_from_memory(FileBuffer, FileInfo.FileSize, &PngWidth, &PngHeight, &NumChannels, DesiredChannels);
+    Assert(Pixels);
+
+    u32 SizeRequested = PngWidth*PngHeight*4;
+    u32 TextureHandle = 0; // TODO(hugo)
+    renderer_texture Texture = ReferToTexture(TextureHandle, PngWidth, PngHeight);
+    texture_op* TextureOp = BeginTextureOp(TextureOpQueue, SizeRequested);
+    Assert(TextureOp);
+    TextureOp->Texture = Texture;
+    Copy(SizeRequested, Pixels, TextureOp->Data);
+    CompleteTextureOp(TextureOpQueue, TextureOp);
+    stbi_image_free(Pixels);
+
+    return(Texture);
+}
+
 internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_render_commands* RenderCommands)
 {
     Platform = Memory->PlatformAPI;
@@ -164,6 +196,9 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
 		CreateRoom(GameState, RectMinMax(-5, -5, 5, 5), WallC, GroundC, RoomFlag_RightHole);
 		CreateRoom(GameState, RectMinMax(6, -5, 16, 5), GroundC, WallC, RoomFlag_LeftHole);
 		PushPlayer(GameState, V2(-2.0f, -1.0f), PlayerC);
+
+        GameState->TextSize = 100.0f;
+        GameState->TileSetTexture = LoadBitmap(Memory->TextureQueue, "../data/roguelike_tileset.png");
     }
 
 	GameState->Timer += Input->dtForFrame;
@@ -172,6 +207,7 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
 	for(u32 EntityIndex = 0; EntityIndex < GameState->EntityCount; ++EntityIndex)
 	{
 		entity* Entity = GameState->Entities + EntityIndex;
+#if 0
 		if(ShowImgui)
 		{
 			char Buffer[256];
@@ -184,6 +220,7 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
 				ImGui::Text("Type %u", Entity->Type);
 			}
 		}
+#endif
 
 		if(Entity->Type == EntityType_Player)
 		{
@@ -229,7 +266,7 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
 				}
 			}
 		}
-		PushTile(RenderCommands, Entity->P, Entity->TileSetP, Entity->Color);
+		PushTile(RenderCommands, GameState->TileSetTexture, Entity->P, Entity->TileSetP, Entity->Color);
 	}
 
 	if(GameState->JustSteppedOnConnectionTimer > 0.0f)
@@ -238,7 +275,15 @@ internal void GameUpdateAndRender(game_memory* Memory, game_input* Input, game_r
 		f32 Alpha = Clamp01MapToRange(0.0f, GameState->JustSteppedOnConnectionTimer, 5.0f);
 		v4 TextC = ColorPalette0[4];
 		TextC.a = Alpha;
-		PushText(RenderCommands, V2(0.0f, 200.0f), TextC, 30.0f, "NEW ROOM");
+		PushText(RenderCommands, V2(0.0f, 200.0f), TextC, GameState->TextSize, "NEW ROOM");
 	}
+#if 0
+    ImGui::Text("%f", GameState->JustSteppedOnConnectionTimer);
+    ImGui::SliderFloat("Text Size", &GameState->TextSize, 0.0f, 500.0f);
+    if(ImGui::Button("TIME"))
+    {
+        GameState->JustSteppedOnConnectionTimer = 5.0f;
+    }
+#endif
 }
 
