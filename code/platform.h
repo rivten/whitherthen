@@ -90,6 +90,25 @@ inline b32 IsDown(game_button_state State)
     return(Result);
 }
 
+// NOTE(hugo): Debug API
+
+#define COLLAPSING_HEADER(name) b32 name(const char* label)
+typedef COLLAPSING_HEADER(collapsing_header);
+#define SLIDER_FLOAT2(name) b32 name(const char* label, float v[2], float v_min, float v_max)
+typedef SLIDER_FLOAT2(slider_float2);
+#define COLOR_EDIT4(name) b32 name(const char* label, float col[4])
+typedef COLOR_EDIT4(color_edit4);
+#define DEBUG_TEXT(name) void name(const char* fmt, ...)
+typedef DEBUG_TEXT(text);
+
+typedef struct debug_api
+{
+    collapsing_header* CollapsingHeader;
+    slider_float2* SliderFloat2;
+    color_edit4* ColorEdit4;
+    text* Text;
+} debug_api;
+
 typedef struct platform_file_handle
 {
     b32 NoErrors;
@@ -188,6 +207,10 @@ typedef struct platform_api
         
     platform_allocate_memory *AllocateMemory;
     platform_deallocate_memory *DeallocateMemory;
+
+#if COMPILE_INTERNAL
+    debug_api Debug;
+#endif
 } platform_api;
 
 extern platform_api Platform;
@@ -200,10 +223,6 @@ typedef struct game_memory
 
     b32 ExecutableReloaded;
     platform_api PlatformAPI;
-
-#ifdef COMPILE_INTERNAL
-	//ImGuiContext* ImGuiContext;
-#endif
 } game_memory;
 
 struct game_render_commands;

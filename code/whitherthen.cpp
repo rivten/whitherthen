@@ -185,9 +185,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     if(!GameState)
     {
         GameState = Memory->GameState = BootstrapPushStruct(game_state, TotalArena);
-#if COMPILE_INTERNAL
-		//ImGui::SetCurrentContext(Memory->ImGuiContext);
-#endif
 
 		v4 WallC = ColorPalette0[0];
 		v4 GroundC = ColorPalette0[1];
@@ -208,18 +205,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 	{
 		entity* Entity = GameState->Entities + EntityIndex;
 #if 0
-		if(ShowImgui)
-		{
-			char Buffer[256];
-			FormatString(ArrayCount(Buffer), Buffer, "Entity %u", EntityIndex);
-			if(ImGui::CollapsingHeader(Buffer))
-			{
-				ImGui::SliderFloat2("P", &Entity->P.x, 0.0f, 100.0f);
-				ImGui::SliderFloat2("TileSetP", &Entity->TileSetP.x, 0.0f, 100.0f);
-				ImGui::ColorEdit4("Color", &Entity->Color.x);
-				ImGui::Text("Type %u", Entity->Type);
-			}
-		}
+        char Buffer[256];
+        FormatString(ArrayCount(Buffer), Buffer, "Entity %u", EntityIndex);
+        if(Platform.Debug.CollapsingHeader(Buffer))
+        {
+            Platform.Debug.SliderFloat2("P", &Entity->P.x, 0.0f, 100.0f);
+            Platform.Debug.SliderFloat2("TileSetP", &Entity->TileSetP.x, 0.0f, 100.0f);
+            Platform.Debug.ColorEdit4("Color", &Entity->Color.x);
+            Platform.Debug.Text("Type %u", Entity->Type);
+        }
 #endif
 
 		if(Entity->Type == EntityType_Player)
@@ -279,13 +273,5 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 	}
 
 	PushRect(RenderCommands, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V4(1.0f, 0.0f, 0.0f, 0.5f));
-#if 0
-    ImGui::Text("%f", GameState->JustSteppedOnConnectionTimer);
-    ImGui::SliderFloat("Text Size", &GameState->TextSize, 0.0f, 500.0f);
-    if(ImGui::Button("TIME"))
-    {
-        GameState->JustSteppedOnConnectionTimer = 5.0f;
-    }
-#endif
 }
 

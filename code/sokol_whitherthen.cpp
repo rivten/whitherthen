@@ -52,6 +52,29 @@ global sokol_game_function_table Game = {};
 
 global sokol_state GlobalSokolState;
 
+COLLAPSING_HEADER(DEBUGCollapsingHeader)
+{
+    return(ImGui::CollapsingHeader(label));
+}
+
+SLIDER_FLOAT2(DEBUGSliderFloat2)
+{
+    return(ImGui::SliderFloat2(label, v, v_min, v_max));
+}
+
+COLOR_EDIT4(DEBUGColorEdit4)
+{
+    return(ImGui::ColorEdit4(label, col));
+}
+
+DEBUG_TEXT(DEBUGText)
+{
+    va_list ArgList;
+    va_start(ArgList, fmt);
+    ImGui::TextV(fmt, ArgList);
+    va_end(ArgList);
+}
+
 PLATFORM_ALLOCATE_MEMORY(SokolAllocateMemory)
 {
     // NOTE(casey): We require memory block headers not to change the cache
@@ -571,9 +594,10 @@ internal void SokolInit(void)
 		Assert(false);
 	}
 #else
-	RendererFunctions.LoadRenderer = &SokolInitGFX;
+	RendererFunctions.LoadRenderer = &RendererInit;
 	RendererFunctions.BeginFrame = &RendererBeginFrame;
 	RendererFunctions.EndFrame = &RendererEndFrame;
+    RendererFunctions.UnloadRenderer = &RendererDestroy;
 #endif
 
 	Renderer = RendererFunctions.LoadRenderer(&Limits);
@@ -600,7 +624,10 @@ internal void SokolInit(void)
 
     GameMemory.TextureQueue = &Renderer->TextureQueue;
 #ifdef COMPILE_INTERNAL
-	//GameMemory.ImGuiContext = ImGui::GetCurrentContext();
+    GameMemory.PlatformAPI.Debug.CollapsingHeader = &DEBUGCollapsingHeader;
+    GameMemory.PlatformAPI.Debug.SliderFloat2 = &DEBUGSliderFloat2;
+    GameMemory.PlatformAPI.Debug.ColorEdit4 = &DEBUGColorEdit4;
+    GameMemory.PlatformAPI.Debug.Text = &DEBUGText;
 #endif
 }
 
@@ -723,8 +750,8 @@ internal void SokolEvent(const sapp_event* Event)
 
 internal void SokolCleanup(void)
 {
-	simgui_shutdown();
-	RendererDestroy((sokol_gfx *)Renderer);
+	RendererFunctions.UnloadRenderer(Renderer);
+    Renderer = 0;
 }
 
 sapp_desc sokol_main(int ArgumentCount, char** Arguments)

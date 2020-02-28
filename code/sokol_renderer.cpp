@@ -20,6 +20,7 @@
 #include "imgui_draw.cpp"
 #include "imgui_widgets.cpp"
 #include "imgui_demo.cpp"
+
 #define SOKOL_IMGUI_IMPL
 #include "sokol_imgui.h"
 
@@ -104,7 +105,7 @@ internal void InitTextureQueue(renderer_texture_queue *Queue, u32 RequestTransfe
 
 #define GFX_INIT_BUFFER_SIZE (1 << 15)
 
-internal platform_renderer* SokolInitGFX(platform_renderer_limits* Limits)
+internal platform_renderer* RendererInit(platform_renderer_limits* Limits)
 {
 	sokol_gfx* GFX = (sokol_gfx *)SokolRendererAlloc(sizeof(sokol_gfx));
     InitTextureQueue(&GFX->Header.TextureQueue, Limits->TextureTransferBufferSize, SokolRendererAlloc(Limits->TextureTransferBufferSize));
@@ -237,8 +238,10 @@ internal platform_renderer* SokolInitGFX(platform_renderer_limits* Limits)
 	return((platform_renderer *)GFX);
 }
 
-internal void RendererDestroy(sokol_gfx* GFX)
+internal void RendererDestroy(platform_renderer* Renderer)
 {
+	simgui_shutdown();
+    sokol_gfx* GFX = (sokol_gfx *)Renderer;
     sfons_destroy(GFX->FontContext);
     sgl_shutdown();
 	sg_shutdown();

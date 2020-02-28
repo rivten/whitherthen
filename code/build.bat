@@ -6,8 +6,6 @@ set CommonLinkerDebugFlags=/incremental:no /opt:ref /subsystem:windows /ignore:4
 
 pushd ..\build\
 
-REM Renderer
-
 REM Game
 cl %CommonCompilerDebugFlags% ..\code\whitherthen.cpp -Fmhandmade.map -LD /link -incremental:no -opt:ref -PDB:whitherthen_%random%.pdb -EXPORT:GameUpdateAndRender
 
