@@ -19,6 +19,7 @@
 #include "memory.h"
 
 #ifdef COMPILE_WINDOWS
+#define SOKOL_STATE_FILE_NAME_COUNT MAX_PATH
 #elif COMPILE_LINUX
 #define SOKOL_STATE_FILE_NAME_COUNT  512
 #endif
@@ -195,6 +196,11 @@ struct sokol_loaded_code
     char *DLLFullPath;
     
 #ifdef COMPILE_WINDOWS
+    u32 TempDLLNumber;
+    char* LockFullPath;
+    char* TransientDLLName;
+    HMODULE DLL;
+    FILETIME DLLLastWriteTime;
 #elif COMPILE_LINUX
     void *DLL;
     ino_t DLLFileID;
@@ -266,7 +272,19 @@ internal void SokolUnloadLibrary(void *Handle)
 internal void SokolUnloadCode(sokol_loaded_code *Loaded)
 {
 #if COMPILE_WINDOWS
-	NotImplemented
+    if(Loaded->DLL)
+    {
+        // TODO(casey): Currently, we never unload libraries, because
+        // we may still be pointing to strings that are inside them
+        // (despite our best efforts).  Should we just make "never unload"
+        // be the policy?
+        
+        // FreeLibrary(GameCode->GameCodeDLL);
+        Loaded->DLL = 0;
+    }
+    
+    Loaded->IsValid = false;
+    ZeroArray(Loaded->FunctionCount, Loaded->Functions);
 #elif COMPILE_LINUX
     if (Loaded->DLL)
     {
@@ -283,9 +301,99 @@ internal void SokolUnloadCode(sokol_loaded_code *Loaded)
 #endif
 }
 
+#if COMPILE_WINDOWS
+inline FILETIME SokolGetLastWriteTime(char *Filename)
+{
+    FILETIME LastWriteTime = {};
+    
+    WIN32_FILE_ATTRIBUTE_DATA Data;
+    if(GetFileAttributesExA(Filename, GetFileExInfoStandard, &Data))
+    {
+        LastWriteTime = Data.ftLastWriteTime;
+    }
+    
+    return(LastWriteTime);
+}
+#endif
+
+internal void SokolBuildEXEPathFileName(sokol_state *State, char *FileName, u32 Unique, int DestCount, char *Dest)
+{
+    string A =
+    {
+        (umm)(State->OnePastLastEXEFileNameSlash - State->EXEFileName),
+        (u8 *)State->EXEFileName,
+    };
+    string B = WrapZ(FileName);
+    if(Unique == 0)
+    {
+        FormatString(DestCount, Dest, "%S%S", A, B);
+    }
+    else
+    {
+        FormatString(DestCount, Dest, "%S%d_%S", A, Unique, B);
+    }
+}
+
+internal void SokolBuildEXEPathFileName(sokol_state *State, char *FileName, int DestCount, char *Dest)
+{
+    SokolBuildEXEPathFileName(State, FileName, 0, DestCount, Dest);
+}
+
 internal void SokolLoadCode(sokol_state* State, sokol_loaded_code *Loaded)
 {
 #if COMPILE_WINDOWS
+    char *SourceDLLName = Loaded->DLLFullPath;
+    char *LockFileName = Loaded->LockFullPath;
+    
+    char TempDLLName[SOKOL_STATE_FILE_NAME_COUNT];
+    
+    WIN32_FILE_ATTRIBUTE_DATA Ignored;
+    if(!GetFileAttributesExA(LockFileName, GetFileExInfoStandard, &Ignored))
+    {
+        Loaded->DLLLastWriteTime = SokolGetLastWriteTime(SourceDLLName);
+        
+        for(u32 AttemptIndex = 0;
+            AttemptIndex < 128;
+            ++AttemptIndex)
+        {
+            SokolBuildEXEPathFileName(State, Loaded->TransientDLLName, Loaded->TempDLLNumber,
+                                      sizeof(TempDLLName), TempDLLName);
+            if(++Loaded->TempDLLNumber >= 1024)
+            {
+                Loaded->TempDLLNumber = 0;
+            }
+            
+            if(CopyFile(SourceDLLName, TempDLLName, FALSE))
+            {
+                break;
+            }
+        }
+        
+        Loaded->DLL = LoadLibraryA(TempDLLName);
+        if(Loaded->DLL)
+        {
+            Loaded->IsValid = true;
+            for(u32 FunctionIndex = 0;
+                FunctionIndex < Loaded->FunctionCount;
+                ++FunctionIndex)
+            {
+                void *Function = GetProcAddress(Loaded->DLL, Loaded->FunctionNames[FunctionIndex]);
+                if(Function)
+                {
+                    Loaded->Functions[FunctionIndex] = Function;
+                }
+                else
+                {
+                    Loaded->IsValid = false;
+                }
+            }
+        }
+    }
+    
+    if(!Loaded->IsValid)
+    {
+        SokolUnloadCode(Loaded);
+    }
 #elif COMPILE_LINUX
    ino_t FileID = LinuxFileId(Loaded->DLLFullPath);
     
@@ -374,7 +482,19 @@ internal void SokolLoadCode(sokol_state* State, sokol_loaded_code *Loaded)
 internal void SokolGetEXEFileName(sokol_state *State)
 {
 #if COMPILE_WINDOWS
-	NotImplemented
+    // NOTE(casey): Never use MAX_PATH in code that is user-facing, because it
+    // can be dangerous and lead to bad results.
+    DWORD SizeOfFilename = GetModuleFileNameA(0, State->EXEFileName, sizeof(State->EXEFileName));
+    State->OnePastLastEXEFileNameSlash = State->EXEFileName;
+    for(char *Scan = State->EXEFileName;
+        *Scan;
+        ++Scan)
+    {
+        if(*Scan == '\\')
+        {
+            State->OnePastLastEXEFileNameSlash = Scan + 1;
+        }
+    }
 #elif COMPILE_LINUX
     // NOTE(casey): Never use MAX_PATH in code that is user-facing, because it
     // can be dangerous and lead to bad results.
@@ -395,34 +515,6 @@ internal void SokolGetEXEFileName(sokol_state *State)
 #endif
 }
 
-internal void SokolBuildEXEPathFileName(sokol_state *State, char *FileName, u32 Unique, int DestCount, char *Dest)
-{
-#if COMPILE_WINDOWS
-	NotImplemented
-#elif COMPILE_LINUX
-    string A =
-    {
-        (umm)(State->OnePastLastEXEFileNameSlash - State->EXEFileName),
-        (u8 *)State->EXEFileName,
-    };
-    string B = WrapZ(FileName);
-    if (Unique == 0) 
-    {
-        FormatString(DestCount, Dest, "%S%S", A, B);
-    }
-    else
-    {
-        FormatString(DestCount, Dest, "%S%d_%S", A, Unique, B);
-    }
-    //fprintf(stdout, "Build path %s\n", Dest);
-#endif
-}
-
-internal void SokolBuildEXEPathFileName(sokol_state *State, char *FileName, int DestCount, char *Dest)
-{
-    SokolBuildEXEPathFileName(State, FileName, 0, DestCount, Dest);
-}
-
 #define TEXTURE_COUNT 128
 #define TEXTURE_TRANSFER_BUFFER_SIZE (128*1024*1024)
 
@@ -434,10 +526,22 @@ internal void SokolInit(void)
 
     SokolGetEXEFileName(State);
 
+#if COMPILE_WINDOWS
+    char* GameDLLName = "whitherthen.dll";
+#elif COMPILE_LINUX
+    char* GameDLLName = "libWhitherthen.so";
+#endif
+
     char SourceGameCodeDLLFullPath[SOKOL_STATE_FILE_NAME_COUNT];
-    SokolBuildEXEPathFileName(State, "libWhitherthen.so",
+    SokolBuildEXEPathFileName(State, GameDLLName,
                               sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);
 
+#if COMPILE_WINDOWS
+    char CodeLockFullPath[SOKOL_STATE_FILE_NAME_COUNT];
+    SokolBuildEXEPathFileName(State, "lock.tmp",
+                              sizeof(CodeLockFullPath), CodeLockFullPath);
+#endif
+    
 #if 0
     char RendererCodeDLLFullPath[SOKOL_STATE_FILE_NAME_COUNT];
     SokolBuildEXEPathFileName(State, "libWhitherthenSokolGFX.so",
@@ -476,6 +580,10 @@ internal void SokolInit(void)
 
 	sokol_loaded_code GameCode = {};
 	GameCode.DLLFullPath = SourceGameCodeDLLFullPath;
+#if COMPILE_WINDOWS
+    GameCode.TransientDLLName = "whitherthen_game_temp.dll";
+    GameCode.LockFullPath = CodeLockFullPath;
+#endif
 	GameCode.FunctionCount = ArrayCount(SokolGameFunctionTableNames);
 	GameCode.FunctionNames = SokolGameFunctionTableNames;
 	GameCode.Functions = (void **)&Game;
