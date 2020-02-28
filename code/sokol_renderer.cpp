@@ -1,25 +1,7 @@
-#ifdef _WIN32
-#pragma warning(push)
-#pragma warning(disable: 4267)
-#endif
-#define FONS_STATIC
-#define FONTSTASH_IMPLEMENTATION
-#include "fontstash.h"
-#ifdef _WIN32
-#pragma warning(pop)
-#endif
-
 #define SOKOL_GL_IMPL
 #include "sokol_gl.h"
 #define SOKOL_FONTSTASH_IMPL
 #include "sokol_fontstash.h"
-
-#include "imgui.cpp"
-#undef STB_TRUETYPE_IMPLEMENTATION
-#undef __STB_INCLUDE_STB_TRUETYPE_H__
-#include "imgui_draw.cpp"
-#include "imgui_widgets.cpp"
-#include "imgui_demo.cpp"
 
 #define SOKOL_IMGUI_IMPL
 #include "sokol_imgui.h"

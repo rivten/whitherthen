@@ -207,12 +207,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 #if 0
         char Buffer[256];
         FormatString(ArrayCount(Buffer), Buffer, "Entity %u", EntityIndex);
-        if(Platform.Debug.CollapsingHeader(Buffer))
+        if(Platform.Dev.CollapsingHeader(Buffer))
         {
-            Platform.Debug.SliderFloat2("P", &Entity->P.x, 0.0f, 100.0f);
-            Platform.Debug.SliderFloat2("TileSetP", &Entity->TileSetP.x, 0.0f, 100.0f);
-            Platform.Debug.ColorEdit4("Color", &Entity->Color.x);
-            Platform.Debug.Text("Type %u", Entity->Type);
+            Platform.Dev.SliderFloat2("P", &Entity->P.x, 0.0f, 100.0f);
+            Platform.Dev.SliderFloat2("TileSetP", &Entity->TileSetP.x, 0.0f, 100.0f);
+            Platform.Dev.ColorEdit4("Color", &Entity->Color.x);
+            Platform.Dev.Text("Type %u", Entity->Type);
         }
 #endif
 

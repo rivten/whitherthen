@@ -90,109 +90,19 @@ inline b32 IsDown(game_button_state State)
     return(Result);
 }
 
-// NOTE(hugo): Debug API
+#ifdef __cplusplus
+}
+#endif
 
-#define COLLAPSING_HEADER(name) b32 name(const char* label)
-typedef COLLAPSING_HEADER(collapsing_header);
-#define SLIDER_FLOAT2(name) b32 name(const char* label, float v[2], float v_min, float v_max)
-typedef SLIDER_FLOAT2(slider_float2);
-#define COLOR_EDIT4(name) b32 name(const char* label, float col[4])
-typedef COLOR_EDIT4(color_edit4);
-#define DEBUG_TEXT(name) void name(const char* fmt, ...)
-typedef DEBUG_TEXT(text);
+#include "dev_ui.h"
 
-typedef struct debug_api
-{
-    collapsing_header* CollapsingHeader;
-    slider_float2* SliderFloat2;
-    color_edit4* ColorEdit4;
-    text* Text;
-} debug_api;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct platform_file_handle
-{
-    b32 NoErrors;
-    void *Platform;
-} platform_file_handle;
+#include "file.h"
+#include "allocation.h"
 
-typedef struct platform_file_info
-{
-    platform_file_info *Next;
-    u64 FileDate; // NOTE(casey): This is a 64-bit number that _means_ the date to the platform, but doesn't have to be understood by the app as any particular date.
-    u64 FileSize;
-    char *BaseName; // NOTE(casey): Doesn't include a path or an extension
-    void *Platform;
-} platform_file_info;
-typedef struct platform_file_group
-{
-    u32 FileCount;
-    platform_file_info *FirstFileInfo;
-    void *Platform;
-} platform_file_group;
-
-typedef enum platform_file_type
-{
-    PlatformFileType_Count,
-} platform_file_type;
-    
-enum platform_memory_block_flags
-{
-    PlatformMemory_NotRestored = 0x1,
-    PlatformMemory_OverflowCheck = 0x2,
-    PlatformMemory_UnderflowCheck = 0x4,
-};
-
-struct platform_memory_block
-{
-    u64 Flags;
-    u64 Size;
-    u8 *Base;
-    umm Used;
-    platform_memory_block *ArenaPrev;
-};
-
-#define PLATFORM_GET_ALL_FILE_OF_TYPE_BEGIN(name) platform_file_group name(platform_file_type Type)
-typedef PLATFORM_GET_ALL_FILE_OF_TYPE_BEGIN(platform_get_all_files_of_type_begin);
-    
-#define PLATFORM_GET_ALL_FILE_OF_TYPE_END(name) void name(platform_file_group *FileGroup)
-typedef PLATFORM_GET_ALL_FILE_OF_TYPE_END(platform_get_all_files_of_type_end);
-    
-enum platform_open_file_mode_flags
-{
-    OpenFile_Read = 0x1,
-    OpenFile_Write = 0x2,
-};
-//#define PLATFORM_OPEN_FILE(name) platform_file_handle name(platform_file_group *FileGroup, platform_file_info *Info, u32 ModeFlags)
-//typedef PLATFORM_OPEN_FILE(platform_open_file);
-#define PLATFORM_OPEN_FILE(name) platform_file_handle name(char* FileName, platform_file_info *Info)
-typedef PLATFORM_OPEN_FILE(platform_open_file);
-    
-#define PLATFORM_GET_FILE_BY_PATH(name) platform_file_info *name(platform_file_group *FileGroup, char *Path, u32 ModeFlags)
-typedef PLATFORM_GET_FILE_BY_PATH(platform_get_file_by_path);
-    
-#define PLATFORM_READ_DATA_FROM_FILE(name) void name(platform_file_handle *Handle, u64 Offset, u64 Size, void *Dest)
-typedef PLATFORM_READ_DATA_FROM_FILE(platform_read_data_from_file);
-    
-#define PLATFORM_WRITE_DATA_TO_FILE(name) void name(platform_file_handle *Handle, u64 Offset, u64 Size, void *Source)
-typedef PLATFORM_WRITE_DATA_TO_FILE(platform_write_data_to_file);
-    
-#define PLATFORM_ATOMIC_REPLACE_FILE_CONTENTS(name) b32 name(platform_file_info *Info, u64 Size, void *Source)
-typedef PLATFORM_ATOMIC_REPLACE_FILE_CONTENTS(platform_atomic_replace_file_contents);
-    
-#define PLATFORM_FILE_ERROR(name) void name(platform_file_handle *Handle, char *Message)
-typedef PLATFORM_FILE_ERROR(platform_file_error);
-    
-#define PLATFORM_CLOSE_FILE(name) void name(platform_file_handle *Handle)
-typedef PLATFORM_CLOSE_FILE(platform_close_file);
-    
-#define PlatformNoFileErrors(Handle) ((Handle)->NoErrors)
-    
-#define PLATFORM_ALLOCATE_MEMORY(name) platform_memory_block *name(memory_index Size, u64 Flags)
-typedef PLATFORM_ALLOCATE_MEMORY(platform_allocate_memory);
-    
-#define PLATFORM_DEALLOCATE_MEMORY(name) void name(platform_memory_block *Block)
-typedef PLATFORM_DEALLOCATE_MEMORY(platform_deallocate_memory);
-    
 typedef struct platform_api
 {
     platform_get_all_files_of_type_begin *GetAllFilesOfTypeBegin;
@@ -209,7 +119,7 @@ typedef struct platform_api
     platform_deallocate_memory *DeallocateMemory;
 
 #if COMPILE_INTERNAL
-    debug_api Debug;
+    dev_ui Dev;
 #endif
 } platform_api;
 
