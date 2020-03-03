@@ -12,20 +12,6 @@ global char *SokolGameFunctionTableNames[] =
     //"GameGetSoundSamples",
 };
 
-enum sokol_memory_block_flag
-{
-    SokolMem_AllocatedDuringLooping = 0x1,
-    SokolMem_FreedDuringLooping = 0x2,
-};
-
-struct sokol_memory_block
-{
-    platform_memory_block Block;
-    sokol_memory_block* Prev;
-    sokol_memory_block* Next;
-    u64 LoopingFlags;
-};
-
 struct sokol_state
 {
     ticket_mutex MemoryMutex;

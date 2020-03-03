@@ -25,6 +25,7 @@
 
 #define FILE_IMPLEMENTATION
 #define DEVUI_IMPLEMENTATION
+#define ALLOCATION_IMPLEMENTATION
 #include "platform.h"
 #include "intrinsics.h"
 #include "math.h"
@@ -64,8 +65,6 @@ global sokol_renderer_function_table RendererFunctions = {};
 global sokol_game_function_table Game = {}; 
 
 global sokol_state GlobalSokolState;
-
-#include "allocation.cpp"
 
 internal void SokolBuildEXEPathFileName(sokol_state *State, char *FileName, u32 Unique, int DestCount, char *Dest)
 {
@@ -137,6 +136,9 @@ internal void SokolInit(void)
     sokol_state* State = &GlobalSokolState;
     State->MemorySentinel.Prev = &State->MemorySentinel;
     State->MemorySentinel.Next = &State->MemorySentinel;
+
+	GlobalMemorySentinel = &State->MemorySentinel;
+	GlobalMemoryMutex = &State->MemoryMutex;
 
     SokolGetEXEFileName(State);
 
