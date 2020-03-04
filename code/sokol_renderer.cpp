@@ -132,6 +132,11 @@ internal platform_renderer* RendererInit(platform_renderer_limits* Limits)
     ImageDesc.layers = GFX->MaxTextureCount;
     ImageDesc.usage = SG_USAGE_STREAM;
     ImageDesc.type = SG_IMAGETYPE_ARRAY;
+    ImageDesc.min_filter = SG_FILTER_NEAREST;
+    ImageDesc.mag_filter = SG_FILTER_NEAREST;
+    ImageDesc.wrap_u = SG_WRAP_MIRRORED_REPEAT;
+    ImageDesc.wrap_v = SG_WRAP_MIRRORED_REPEAT;
+    ImageDesc.wrap_w = SG_WRAP_MIRRORED_REPEAT;
     ImageDesc.content = {};
     GFX->TextureArray = sg_make_image(&ImageDesc);
 
@@ -152,8 +157,8 @@ internal platform_renderer* RendererInit(platform_renderer_limits* Limits)
 		in vec4 VertColor;
         in int VertTexIndex;
 
-		out vec2 FragUV;
-		out vec4 FragColor;
+		smooth out vec2 FragUV;
+		smooth out vec4 FragColor;
         flat out int FragTexIndex;
 
 		void main()
@@ -167,8 +172,8 @@ internal platform_renderer* RendererInit(platform_renderer_limits* Limits)
 
 	ShaderDesc.fs.source = R"FOO(
 		#version 330 core
-		in vec2 FragUV;
-		in vec4 FragColor;
+		smooth in vec2 FragUV;
+		smooth in vec4 FragColor;
         flat in int FragTexIndex;
 
 		uniform sampler2DArray TextureSampler;
@@ -232,7 +237,7 @@ internal void RendererDestroy(platform_renderer* Renderer)
 game_render_commands* RendererBeginFrame(platform_renderer* Renderer, v2u OSWindowDim, f32 dt)
 {
 	sokol_gfx* GFX = (sokol_gfx *)Renderer;
-	simgui_new_frame(sapp_width(), sapp_height(), dt);
+	simgui_new_frame(OSWindowDim.x, OSWindowDim.y, dt);
 
 	game_render_commands* Commands = &GFX->RenderCommands;
 	Commands->MaxVertexCount = GFX->MaxVertexCount;

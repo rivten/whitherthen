@@ -185,20 +185,27 @@ inline void PushQuad(game_render_commands* Commands, renderer_texture Texture,
 inline void PushBitmap(game_render_commands* Commands, renderer_texture Texture,
 		rectangle2 SourceRect, rectangle2 DestRect, v4 Color)
 {
-	v4 P0 = V4(DestRect.Min.x / (float)Commands->OSWindowDim.x, DestRect.Min.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f);
-	v2 UV0 = V2(SourceRect.Min.x, SourceRect.Max.y);
+    // NOTE(hugo): This might look a little bit fancy... and it is !!
+    // Without this line, the rendering of exact pixel perfect tileset is fucked up
+    // at certain resolution. 
+    // I could exactly figure out why this is the case but it seems that the rounding
+    // might be the answer...
+    v2 UVOffset = (-0.5f / (f32)TEXTURE_ARRAY_DIM) * V2(1, 1);
+
+	v4 P0 = V4(2.0f * DestRect.Min.x / (float)Commands->OSWindowDim.x, 2.0f * DestRect.Min.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f);
+	v2 UV0 = V2(SourceRect.Min.x, SourceRect.Max.y) + UVOffset;
 	v4 C0 = Color;
 
-	v4 P1 = V4(DestRect.Max.x / (float)Commands->OSWindowDim.x, DestRect.Min.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f); 
-	v2 UV1 = V2(SourceRect.Max.x, SourceRect.Max.y); 
+	v4 P1 = V4(2.0f * DestRect.Max.x / (float)Commands->OSWindowDim.x, 2.0f * DestRect.Min.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f); 
+	v2 UV1 = V2(SourceRect.Max.x, SourceRect.Max.y) + UVOffset; 
 	v4 C1 = Color;
 
-	v4 P2 = V4(DestRect.Max.x / (float)Commands->OSWindowDim.x, DestRect.Max.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f);
-	v2 UV2 = V2(SourceRect.Max.x, SourceRect.Min.y);
+	v4 P2 = V4(2.0f * DestRect.Max.x / (float)Commands->OSWindowDim.x, 2.0f * DestRect.Max.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f);
+	v2 UV2 = V2(SourceRect.Max.x, SourceRect.Min.y) + UVOffset;
 	v4 C2 = Color;
 
-	v4 P3 = V4(DestRect.Min.x / (float)Commands->OSWindowDim.x, DestRect.Max.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f);
-	v2 UV3 = V2(SourceRect.Min.x, SourceRect.Min.y);
+	v4 P3 = V4(2.0f * DestRect.Min.x / (float)Commands->OSWindowDim.x, 2.0f * DestRect.Max.y / (float)Commands->OSWindowDim.y, 0.0f, 1.0f);
+	v2 UV3 = V2(SourceRect.Min.x, SourceRect.Min.y) + UVOffset;
 	v4 C3 = Color;
 
 	PushQuad(Commands, Texture,
@@ -224,7 +231,7 @@ internal void PushText(game_render_commands* Commands, v2 P, v4 Color, f32 Size,
 #define TILE_SIZE_IN_PIXELS 16
 internal void PushTile(game_render_commands* RenderCommands, renderer_texture Texture, v2 Pos, v2 TileSetPos, v4 Color)
 {
-    rectangle2 DestRect = RectCenterHalfDim(2.0f * TILE_SIZE_IN_PIXELS * Pos, V2(TILE_SIZE_IN_PIXELS, TILE_SIZE_IN_PIXELS));
+    rectangle2 DestRect = RectCenterHalfDim(TILE_SIZE_IN_PIXELS * Pos, 0.5f * V2(TILE_SIZE_IN_PIXELS, TILE_SIZE_IN_PIXELS));
     rectangle2 SourceRect = RectMinDim(TILE_SIZE_IN_PIXELS * TileSetPos, V2(TILE_SIZE_IN_PIXELS, TILE_SIZE_IN_PIXELS));
 	PushBitmap(RenderCommands, Texture, SourceRect, DestRect, Color);
 }
