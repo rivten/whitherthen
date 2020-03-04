@@ -148,18 +148,22 @@ platform_api Platform;
 
 internal renderer_texture LoadBitmap(renderer_texture_queue* TextureOpQueue, char* FileName)
 {
+    platform_file_group FileGroup = Platform.GetAllFilesOfTypeBegin(PlatformFileType_Bitmap);
     u8 FileBuffer[256*1024] = {};
-    platform_file_info FileInfo = {};
-    platform_file_handle FileHandle = Platform.OpenFile(FileName, &FileInfo);
-    Platform.ReadDataFromFile(&FileHandle, 0, FileInfo.FileSize, FileBuffer);
+    platform_file_info* FileInfo = Platform.GetFileByPath(&FileGroup, FileName, OpenFile_Read);
+    u32 FileSize = FileInfo->FileSize;
+    platform_file_handle FileHandle = Platform.OpenFile(&FileGroup, FileInfo, OpenFile_Read);
+    Platform.ReadDataFromFile(&FileHandle, 0, FileInfo->FileSize, FileBuffer);
     Assert(PlatformNoFileErrors(&FileHandle));
     Platform.CloseFile(&FileHandle);
+
+    Platform.GetAllFilesOfTypeEnd(&FileGroup);
 
     int PngWidth = 0;
     int PngHeight = 0;
     int NumChannels = 0;
     const int DesiredChannels = 4;
-    stbi_uc* Pixels = stbi_load_from_memory(FileBuffer, FileInfo.FileSize, &PngWidth, &PngHeight, &NumChannels, DesiredChannels);
+    stbi_uc* Pixels = stbi_load_from_memory(FileBuffer, FileSize, &PngWidth, &PngHeight, &NumChannels, DesiredChannels);
     Assert(Pixels);
 
     u32 SizeRequested = PngWidth*PngHeight*4;
@@ -184,6 +188,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     game_state* GameState = Memory->GameState;
     if(!GameState)
     {
+        MemAllocateMemory = Platform.AllocateMemory;
+        MemDeallocateMemory = Platform.DeallocateMemory;
         GameState = Memory->GameState = BootstrapPushStruct(game_state, TotalArena);
 
 		v4 WallC = ColorPalette0[0];
@@ -273,5 +279,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 	}
 
 	PushRect(RenderCommands, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V4(1.0f, 0.0f, 0.0f, 0.5f));
+
+    Platform.Dev.Text("Window = (%u, %u)", RenderCommands->OSWindowDim.x, RenderCommands->OSWindowDim.y);
 }
 

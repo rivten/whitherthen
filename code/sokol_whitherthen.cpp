@@ -27,10 +27,6 @@
 #define DEVUI_IMPLEMENTATION
 #define ALLOCATION_IMPLEMENTATION
 #include "platform.h"
-#include "intrinsics.h"
-#include "math.h"
-#include "shared.h"
-#include "memory.h"
 
 #ifdef COMPILE_WINDOWS
 #define SOKOL_STATE_FILE_NAME_COUNT MAX_PATH
@@ -209,8 +205,16 @@ internal void SokolInit(void)
 
 	stm_setup();
 
+
+    MemAllocateMemory = SokolAllocateMemory;
+    MemDeallocateMemory = SokolDeallocateMemory;
+    
+    GameMemory.PlatformAPI.GetAllFilesOfTypeBegin = SokolGetAllFilesOfTypeBegin;
+    GameMemory.PlatformAPI.GetAllFilesOfTypeEnd = SokolGetAllFilesOfTypeEnd;
+    GameMemory.PlatformAPI.GetFileByPath = SokolGetFileByPath;
     GameMemory.PlatformAPI.OpenFile = SokolOpenFile;
     GameMemory.PlatformAPI.CloseFile = SokolCloseFile;
+    GameMemory.PlatformAPI.FileError = SokolFileError;
     GameMemory.PlatformAPI.ReadDataFromFile = SokolReadDataFromFile;
     GameMemory.PlatformAPI.AllocateMemory = SokolAllocateMemory;
     GameMemory.PlatformAPI.DeallocateMemory = SokolDeallocateMemory;

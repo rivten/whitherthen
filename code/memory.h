@@ -1,4 +1,7 @@
 
+global platform_allocate_memory* MemAllocateMemory;
+global platform_deallocate_memory* MemDeallocateMemory;
+
 struct memory_arena
 {
     // TODO(casey): If we see perf problems here, maybe move Used/Base/Size out?
@@ -175,7 +178,7 @@ PushSize_(INTERNAL_MEMORY_PARAM
         memory_index BlockSize = Maximum(Size, Arena->MinimumBlockSize);
         
         platform_memory_block *NewBlock = 
-            Platform.AllocateMemory(BlockSize, Arena->AllocationFlags);
+            MemAllocateMemory(BlockSize, Arena->AllocationFlags);
         NewBlock->ArenaPrev = Arena->CurrentBlock;
         Arena->CurrentBlock = NewBlock;
         //DEBUG_RECORD_BLOCK_ALLOCATION(Arena->CurrentBlock);
@@ -307,7 +310,7 @@ FreeLastBlock(memory_arena *Arena)
     platform_memory_block *Free = Arena->CurrentBlock;
     //DEBUG_RECORD_BLOCK_FREE(Free);
     Arena->CurrentBlock = Free->ArenaPrev;
-    Platform.DeallocateMemory(Free);
+    MemDeallocateMemory(Free);
 }
 
 inline void

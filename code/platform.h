@@ -90,18 +90,24 @@ inline b32 IsDown(game_button_state State)
     return(Result);
 }
 
+#include "allocation.h"
+
 #ifdef __cplusplus
 }
 #endif
 
 #include "dev_ui.h"
 
+#include "intrinsics.h"
+#include "math.h"
+#include "shared.h"
+#include "memory.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include "file.h"
-#include "allocation.h"
 
 typedef struct platform_api
 {
