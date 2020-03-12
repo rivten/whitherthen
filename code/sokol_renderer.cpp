@@ -215,9 +215,12 @@ internal platform_renderer* RendererInit(platform_renderer_limits* Limits)
     s32 AtlasWidth = 512;
     s32 AtlasHeight = 512;
     GFX->FontContext = sfons_create(AtlasWidth, AtlasHeight, FONS_ZERO_BOTTOMLEFT);
-    int IosevkaFont = fonsAddFont(GFX->FontContext, "Iosevka", "../data/iosevka-term-regular_2.ttf");
-    Assert(IosevkaFont != FONS_INVALID);
-    fonsSetFont(GFX->FontContext, IosevkaFont);
+    //int IosevkaFont = fonsAddFont(GFX->FontContext, "Iosevka", "../data/iosevka-term-regular_2.ttf");
+    //Assert(IosevkaFont != FONS_INVALID);
+    //fonsSetFont(GFX->FontContext, IosevkaFont);
+    int LiberationMonoFont = fonsAddFont(GFX->FontContext, "LiberationMono", "../data/LiberationMono-Regular.ttf");
+    Assert(LiberationMonoFont != FONS_INVALID);
+    fonsSetFont(GFX->FontContext, LiberationMonoFont);
 
 	simgui_desc_t ImguiDesc = {};
 	simgui_setup(&ImguiDesc);

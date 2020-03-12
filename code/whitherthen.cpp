@@ -199,7 +199,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 		CreateRoom(GameState, RectMinMax(6, -5, 16, 5), GroundC, WallC, RoomFlag_LeftHole);
 		PushPlayer(GameState, V2(-2.0f, -1.0f), PlayerC);
 
-        GameState->TextSize = 100.0f;
+        GameState->TextSize = 20.0f;
         GameState->TileSetTexture = LoadBitmap(Memory->TextureQueue, "../data/roguelike_tileset.png");
 		DefaultTexture = GameState->TileSetTexture;
     }
